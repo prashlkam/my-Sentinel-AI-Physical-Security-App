@@ -1,0 +1,9 @@
+{
+  "name": "Sentinel Physical Security",
+  "description": "A comprehensive physical security and emergency response application featuring evacuation procedures, incident reporting with media recording, and an AI-powered security assistant.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
