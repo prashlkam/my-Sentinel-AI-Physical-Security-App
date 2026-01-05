@@ -1,10 +1,13 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// GUIDELINE: GoogleGenAI must be instantiated right before making an API call to ensure it uses the latest API key.
+// Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
 
 export const generateSecurityResponse = async (prompt: string) => {
   try {
+    // Correctly initialize the SDK within the function scope.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -21,6 +24,8 @@ export const generateSecurityResponse = async (prompt: string) => {
 
 export const generateEmergencyDocument = async (topic: string, format: string) => {
   try {
+    // Correctly initialize the SDK within the function scope.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Generate a comprehensive ${format} on the topic: ${topic}. Include sections for Preparedness, Response, and Recovery.`,

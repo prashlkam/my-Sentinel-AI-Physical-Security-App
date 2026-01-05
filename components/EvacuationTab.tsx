@@ -1,24 +1,145 @@
 
-import React, { useState } from 'react';
-import { EVACUATION_PROCEDURES, INITIAL_HEADCOUNT } from '../constants';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Users } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { EVACUATION_PROCEDURES } from '../constants';
+import { ChevronLeft, ChevronRight, Users, Plus, Minus, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
+
+const CATEGORIES = ['Men', 'Women', 'Transgender', 'Children (<18)'];
+const HEALTH_STATUSES = ['Dead', 'Seriously Injured', 'Mildly Injured', 'Not Injured'];
+const EVAC_STATUSES = ['Evacuated', 'Being Evacuated', 'Not Yet Evacuated', 'Unaccounted / Missing'];
+
+type HeadcountState = Record<string, number>;
 
 const EvacuationTab: React.FC = () => {
   const [currentCard, setCurrentCard] = useState(0);
-  const [headcount, setHeadcount] = useState(INITIAL_HEADCOUNT);
-  const [view, setView] = useState<'cards' | 'headcount'>('cards');
+  const [view, setView] = useState<'cards' | 'headcount'>('headcount');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  
+  // State is keyed by "Category|Health|Evac"
+  const [counts, setCounts] = useState<HeadcountState>(() => {
+    const initial: HeadcountState = {};
+    CATEGORIES.forEach(c => {
+      HEALTH_STATUSES.forEach(h => {
+        EVAC_STATUSES.forEach(e => {
+          initial[`${c}|${h}|${e}`] = 0;
+        });
+      });
+    });
+    return initial;
+  });
 
   const nextCard = () => setCurrentCard((prev) => (prev + 1) % EVACUATION_PROCEDURES.length);
   const prevCard = () => setCurrentCard((prev) => (prev - 1 + EVACUATION_PROCEDURES.length) % EVACUATION_PROCEDURES.length);
 
-  const togglePresence = (id: string) => {
-    setHeadcount(prev => prev.map(p => p.id === id ? { ...p, present: !p.present } : p));
+  const toggleExpand = (path: string) => {
+    setExpanded(prev => ({ ...prev, [path]: !prev[path] }));
   };
 
-  const presentCount = headcount.filter(p => p.present).length;
+  // Helper to get total for a prefix path
+  const getSum = (prefix: string) => {
+    // Fix: Added explicit type annotation for the accumulator and cast 'val' to number to avoid 'unknown' errors.
+    return Object.entries(counts).reduce((acc: number, [key, val]) => {
+      return key.startsWith(prefix) ? acc + (val as number) : acc;
+    }, 0);
+  };
+
+  // Fix: Explicitly typed 'a' and 'b' as numbers in the reduce callback to resolve 'unknown' type comparison errors.
+  const grandTotal = useMemo(() => Object.values(counts).reduce((a: number, b: number) => a + b, 0), [counts]);
+
+  // Cascading Increment
+  const handleIncrement = (path: string, level: number) => {
+    setCounts(prev => {
+      const next = { ...prev };
+      let targetKey = path;
+      
+      // If we are at a branch, cascade down to the first available bucket
+      // We prioritize "Not Injured" and "Evacuated" for default adds at higher levels
+      if (level === 0) { // Category level
+        targetKey = `${path}|${HEALTH_STATUSES[3]}|${EVAC_STATUSES[0]}`;
+      } else if (level === 1) { // Health level
+        targetKey = `${path}|${EVAC_STATUSES[0]}`;
+      }
+      
+      next[targetKey] = (next[targetKey] || 0) + 1;
+      return next;
+    });
+  };
+
+  // Cascading Decrement
+  const handleDecrement = (path: string, level: number) => {
+    if (getSum(path) === 0) return;
+
+    setCounts(prev => {
+      const next = { ...prev };
+      
+      // Find the first key that starts with this path and has a count > 0
+      const keyToDecrement = Object.keys(next).find(k => k.startsWith(path) && next[k] > 0);
+      
+      if (keyToDecrement) {
+        next[keyToDecrement] = next[keyToDecrement] - 1;
+      }
+      return next;
+    });
+  };
+
+  const TreeItem: React.FC<{ label: string; path: string; level: number }> = ({ label, path, level }) => {
+    const isExpanded = expanded[path];
+    const sum = getSum(path);
+    const hasChildren = level < 2;
+
+    return (
+      <div className="flex flex-col">
+        <div className={`flex items-center justify-between p-3 rounded-xl mb-1 transition-all ${
+          level === 0 ? 'bg-slate-900 border border-slate-800' : 
+          level === 1 ? 'bg-slate-800/40 ml-4' : 'bg-slate-800/20 ml-8'
+        }`}>
+          <div className="flex items-center gap-2 flex-1 cursor-pointer" onClick={() => hasChildren && toggleExpand(path)}>
+            {hasChildren && (
+              isExpanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRightIcon className="w-4 h-4 text-slate-500" />
+            )}
+            <span className={`text-sm font-medium ${level === 0 ? 'text-blue-400 font-bold' : 'text-slate-300'}`}>
+              {label}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-slate-950 rounded-lg border border-slate-800 overflow-hidden">
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleDecrement(path, level); }}
+                className="p-1.5 hover:bg-slate-800 text-slate-400 active:text-red-500 transition-colors"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <div className="px-3 min-w-[3rem] text-center font-mono text-sm font-bold text-white border-x border-slate-800">
+                {sum}
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleIncrement(path, level); }}
+                className="p-1.5 hover:bg-slate-800 text-slate-400 active:text-emerald-500 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="flex flex-col">
+            {(level === 0 ? HEALTH_STATUSES : EVAC_STATUSES).map((sub) => (
+              <TreeItem 
+                key={`${path}|${sub}`} 
+                label={sub} 
+                path={`${path}|${sub}`} 
+                level={level + 1} 
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="p-4 flex flex-col gap-6 animate-in fade-in duration-500">
+    <div className="p-4 flex flex-col gap-6 animate-in fade-in duration-500 pb-12">
       <div className="flex bg-slate-900 p-1 rounded-xl">
         <button 
           onClick={() => setView('cards')}
@@ -35,8 +156,8 @@ const EvacuationTab: React.FC = () => {
       </div>
 
       {view === 'cards' ? (
-        <div className="relative h-96 flex flex-col justify-center items-center">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 w-full max-w-sm shadow-2xl transition-transform active:scale-95 duration-200">
+        <div className="relative h-[450px] flex flex-col justify-center items-center">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 w-full max-sm shadow-2xl transition-transform active:scale-95 duration-200">
             <span className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-2 block">
               {EVACUATION_PROCEDURES[currentCard].type}
             </span>
@@ -68,42 +189,42 @@ const EvacuationTab: React.FC = () => {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between mb-2">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between mb-4 shadow-lg border-l-4 border-l-blue-600">
             <div className="flex items-center gap-3">
-              <Users className="w-6 h-6 text-blue-500" />
-              <div>
-                <h3 className="font-bold">Total Personnel</h3>
-                <p className="text-xs text-slate-400">Mark all present at Assembly Point</p>
+              <div className="p-2 bg-blue-600/20 rounded-lg">
+                <Users className="w-6 h-6 text-blue-500" />
               </div>
-            </div>
-            <div className="text-2xl font-black text-blue-500">
-              {presentCount}/{headcount.length}
+              <div>
+                <h3 className="font-bold text-white">Interactive Headcount</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Expand categories to refine status</p>
+              </div>
             </div>
           </div>
           
-          <div className="space-y-2">
-            {headcount.map(person => (
-              <div 
-                key={person.id}
-                onClick={() => togglePresence(person.id)}
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${
-                  person.present 
-                    ? 'bg-blue-600/10 border-blue-500/50' 
-                    : 'bg-slate-900/50 border-slate-800'
-                }`}
-              >
-                <span className={`font-medium ${person.present ? 'text-blue-200' : 'text-slate-400'}`}>{person.name}</span>
-                {person.present ? (
-                  <CheckCircle className="w-6 h-6 text-blue-500" />
-                ) : (
-                  <XCircle className="w-6 h-6 text-slate-700" />
-                )}
-              </div>
+          <div className="space-y-2 overflow-hidden">
+            {CATEGORIES.map(cat => (
+              <TreeItem key={cat} label={cat} path={cat} level={0} />
             ))}
           </div>
           
-          <button className="mt-4 w-full bg-blue-600 py-4 rounded-xl font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-transform">
-            Submit Status Report
+          {/* Grand Total Section */}
+          <div className="mt-6 bg-blue-600 border border-blue-500 rounded-2xl p-5 shadow-xl shadow-blue-900/20 flex items-center justify-between animate-in slide-in-from-bottom duration-500">
+             <div className="flex flex-col">
+               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-200">Total Personnel Counted</span>
+               <span className="text-sm font-bold text-white opacity-80 italic">Verified at Assembly Points</span>
+             </div>
+             <div className="text-4xl font-black text-white tabular-nums">
+               {grandTotal}
+             </div>
+          </div>
+
+          <button 
+            disabled={grandTotal === 0}
+            className={`mt-4 w-full py-4 rounded-xl font-black tracking-widest uppercase transition-all shadow-lg active:scale-95 ${
+              grandTotal > 0 ? 'bg-slate-100 text-slate-950 shadow-white/10' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            Finalize & Disseminate Report
           </button>
         </div>
       )}
