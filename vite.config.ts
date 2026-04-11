@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
       server: {
         port: port,
         host: '0.0.0.0',
-        allowedHosts: ['localhost', 'mywebapp03-d9fffxh5avayg9bk.southindia-01.azurewebsites.net'],
+        allowedHosts: ['mywebapp03-d9fffxh5avayg9bk.southindia-01.azurewebsites.net', 'localhost'],
         strictPort: false,
       },
       preview: {
