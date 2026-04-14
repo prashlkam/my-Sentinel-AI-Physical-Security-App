@@ -12,11 +12,6 @@ export default defineConfig(({ mode }) => {
         allowedHosts: ['mywebapp01-c4fqfeahebg8ckaw.southindia-01.azurewebsites.net', 'localhost'],
         strictPort: false,
       },
-      preview: {
-        port: port,
-        host: '0.0.0.0',
-        strictPort: false,
-      },
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
