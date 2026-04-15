@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
       server: {
         port,
         host: '0.0.0.0',
+        allowedHosts: ['mywebapp03-d9fffxh5avayg9bk.southindia-01.azurewebsites.net', 'localhost'],
         proxy: {
           '/api': 'http://localhost:8080',
         },
